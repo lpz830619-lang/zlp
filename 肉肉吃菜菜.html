@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <!-- 移动端防缩放，提供类似原生APP的体验 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>今天吃什么？</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", STHeiti, Tahoma, Simhei, sans-serif;
+            background-color: #f7f8fa;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .header {
+            margin: 25px 0 15px;
+            font-size: 26px;
+            font-weight: 800;
+            color: #d32f2f;
+            text-shadow: 0 1px 2px rgba(211,47,47,0.2);
+        }
+
+        .wheel-wrapper {
+            position: relative;
+            width: 320px;
+            height: 320px;
+            margin: 20px auto;
+        }
+        /* 顶部红色指针 */
+        .pointer {
+            position: absolute;
+            top: -16px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 36px;
+            height: 42px;
+            z-index: 10;
+        }
+        .pointer svg {
+            width: 100%;
+            height: 100%;
+            filter: drop-shadow(0 3px 3px rgba(0,0,0,0.3));
+        }
+
+        .wheel-container {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background-color: #fff;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.1), inset 0 0 0 6px #fff;
+            overflow: hidden;
+            /* 设定平滑的物理减速动画 */
+            transition: transform 4s cubic-bezier(0.2, 0.9, 0.1, 1);
+        }
+        canvas {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .spin-btn {
+            background: linear-gradient(135deg, #f44336, #d32f2f);
+            color: white;
+            border: none;
+            border-radius: 30px;
+            padding: 16px 50px;
+            font-size: 20px;
+            font-weight: bold;
+            box-shadow: 0 6px 15px rgba(211, 47, 47, 0.35);
+            cursor: pointer;
+            margin-bottom: 25px;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .spin-btn:active {
+            transform: scale(0.95);
+            box-shadow: 0 2px 8px rgba(211, 47, 47, 0.35);
+        }
+        .spin-btn:disabled {
+            background: #ccc;
+            box-shadow: none;
+            transform: none;
+            cursor: not-allowed;
+        }
+
+        .editor-card {
+            width: 90%;
+            max-width: 400px;
+            background: white;
+            border-radius: 16px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+            margin-bottom: 40px;
+        }
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            font-size: 15px;
+            font-weight: bold;
+            color: #444;
+        }
+        .item-count {
+            color: #1976d2;
+            background: #e3f2fd;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 13px;
+        }
+        textarea {
+            width: 100%;
+            height: 160px;
+            border: 1.5px solid #e0e0e0;
+            border-radius: 10px;
+            padding: 12px;
+            font-size: 14px;
+            line-height: 1.6;
+            resize: none;
+            outline: none;
+            background-color: #fafafa;
+            white-space: pre;
+            overflow-wrap: normal;
+            overflow-x: auto;
+        }
+        textarea:focus {
+            border-color: #d32f2f;
+            background-color: #fff;
+        }
+        .update-btn {
+            width: 100%;
+            background-color: #fff;
+            color: #1976d2;
+            border: 1.5px solid #1976d2;
+            padding: 12px;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            margin-top: 15px;
+            cursor: pointer;
+        }
+        .update-btn:active {
+            background-color: #e3f2fd;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.6);
+            backdrop-filter: blur(3px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .modal-overlay.show {
+            display: flex;
+            opacity: 1;
+        }
+        .modal-content {
+            background: white;
+            width: 80%;
+            max-width: 320px;
+            border-radius: 20px;
+            padding: 30px 20px;
+            text-align: center;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            transform: scale(0.8);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .modal-overlay.show .modal-content {
+            transform: scale(1);
+        }
+        .modal-title {
+            color: #d32f2f;
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+        }
+        .modal-result {
+            font-size: 28px;
+            font-weight: 900;
+            color: #222;
+            margin-bottom: 25px;
+            word-break: break-word;
+        }
+        .modal-close {
+            background: #d32f2f;
+            color: white;
+            border: none;
+            padding: 12px 40px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">今天吃什么？</div>
+
+    <div class="wheel-wrapper">
+        <div class="pointer">
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 22C12 22 20 12.3176 20 7.5C20 3.35786 16.4183 0 12 0C7.58172 0 4 3.35786 4 7.5C4 12.3176 12 22 12 22Z" fill="#d32f2f"/>
+            </svg>
+        </div>
+        <div class="wheel-container" id="wheelContainer">
+            <canvas id="wheelCanvas" width="800" height="800"></canvas>
+        </div>
+    </div>
+
+    <button class="spin-btn" id="spinBtn">立刻开转</button>
+
+    <div class="editor-card">
+        <div class="editor-header">
+            <span>自定义菜单 (每行一个)</span>
+            <span class="item-count" id="itemCount">共 0 个</span>
+        </div>
+        <textarea id="itemInput" wrap="off"></textarea>
+        <button class="update-btn" id="updateBtn">更新转盘数据</button>
+    </div>
+
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal-content">
+            <div class="modal-title">🎉 命中注定的选择是</div>
+            <div class="modal-result" id="modalResultText"></div>
+            <button class="modal-close" id="modalCloseBtn">太棒了，就吃这个！</button>
+        </div>
+    </div>
+
+    <script>
+        // 强制初始化数据：214道菜品
+        const defaultItems = [
+            "豆腐泡烧牛肉", "乡巴佬卤蛋", "韭菜炒千张", "烤红薯", "清炒茼蒿", "蒜蓉油麦菜", "孜然牛肉", "豆腐干炒蒜苗", "土豆烧鸡块", "鱼香肉丝", "排骨汤", "鸭血粉丝汤", "青椒炒千张", "酱牛肉", "黄焖排骨", "番茄炖牛肉", "牛肉大葱馅饺子", "手撕鸡", "萝卜牛肉汤", "香菇青菜", "红烧荷包蛋", "盐煎肉", "烤土豆", "酸辣土豆丝", "红烧肉", "凉拌黄瓜", "鸡蛋炒木耳", "锅包肉", "黄瓜炒蛋", "萝卜排骨汤", "豆腐炒鸡蛋", "红烧排骨", "京酱肉丝", "牛肉粉丝汤", "豉油鸡", "白菜炖豆腐", "白切鸡", "啤酒鸭", "玉米排骨汤", "凉拌豆干", "豆角炒牛肉末", "回锅肉", "馒头", "鸡蛋炒豆干", "鸡蛋炒年糕", "三杯鸡", "鱼香豆腐", "木耳炒蛋", "干锅花菜", "红烧豆腐", "卤蛋", "卤牛肉", "红烧狮子头", "海带排骨汤", "苦瓜炒蛋", "手撕包菜", "杭椒小炒肉", "肉末烧豆腐", "黑椒牛柳", "杭椒牛柳", "西葫芦炒蛋", "红烧猪蹄", "酸萝卜老鸭汤", "水煮牛肉", "青椒牛肉丝", "木耳炒山药", "水煮蛋", "魔芋烧鸭", "蒜蓉娃娃菜", "蒸水蛋", "虫草花鸡汤", "腐竹炒肉", "干煸土豆条", "小炒黄牛肉", "清炒小白菜", "土豆炒肉丝", "芹菜炒鸡丝", "金针菇豆腐", "腐竹焖鸡", "鸡蛋炒西葫芦", "酸汤肥牛", "糖醋里脊", "韭菜炒蛋", "烤牛肉串", "木耳炒肉片", "米饭", "瘦肉丸子汤", "板栗烧鸡", "蒜蓉西兰花", "油豆腐烧肉", "千张炒肉丝", "香煎猪排", "卤鸭翅", "凉拌千张", "铁板牛肉", "腐竹烧排骨", "茶叶蛋", "卤豆干", "干锅土豆片", "洋葱炒蛋", "红烧鸭块", "蒜苔炒肉", "青椒炒蛋", "农家小炒肉", "金针菇鸡汤", "尖椒牛肉末", "腐竹烧牛肉", "千张结烧肉", "炸酥肉", "糖醋荷包蛋", "酸辣鸡杂", "麻辣水煮鱼", "皮蛋瘦肉粥", "紫菜蛋花汤", "清炒空心菜", "主食", "黄焖鸡", "芹菜炒千张", "蜜汁叉烧", "鸡蛋饼", "番茄烧豆腐", "清炒生菜", "烤五花肉", "红烧茄子", "猪肚排骨汤", "酱爆鸡丁", "清炒菠菜", "大盘鸡", "东坡肉", "萝卜炖牛肉", "冬瓜炖牛肉", "木耳炒鸡片", "凉拌腐竹", "菠菜蛋花汤", "椒盐排骨", "香菇烧豆腐", "西红柿牛肉汤", "清炒四季豆", "清炒娃娃菜", "土豆烧牛肉", "可乐鸡翅", "荤菜类", "地三鲜", "青椒荷包蛋", "粉蒸肉", "清炒花菜", "油豆腐烧白菜", "海带炖豆腐", "芹菜香干", "清炒油麦菜", "炸豆腐泡", "蒜苔炒牛肉", "凉拌皮蛋", "蒜苗炒蛋", "宫保鸡丁", "辣子鸡", "香煎牛排", "香干炒肉丝", "韭菜香干", "清炒上海青", "芹菜炒肉片", "香菇烧牛肉", "酸辣大白菜", "萝卜炖豆腐", "泡椒肥牛", "油豆腐烧鸡块", "香椿炒蛋", "黑椒牛排", "红烧鸡翅", "鸡蛋炒粉丝", "香酥鸡排", "千张结炖排骨", "青椒炒鸡丁", "皮蛋豆腐", "水产", "泡椒牛肉丝", "香菇蒸蛋", "莲藕排骨汤", "清炒荷兰豆", "香菇滑鸡", "北京烤鸭", "泡椒鸡杂", "牛腩煲", "荷包蛋", "丝瓜蛋花汤", "肉末蒸蛋", "番茄蛋花汤", "洋葱炒牛肉", "葱花炒蛋", "麻婆豆腐", "盐焗鸡", "木耳炒牛肉", "冬瓜鸡汤", "芹菜炒蛋", "五花肉", "孜然烤牛肉", "奥尔良烤翅", "酱肘子", "牛肉汤", "姜母鸭", "清炒西兰花", "麻婆牛肉", "芹菜牛肉丝", "干煸豆角", "红烧牛肉", "韭黄炒牛肉", "木耳炒白菜", "青椒香干", "豆腐干炒芹菜", "青椒皮蛋", "梅菜扣肉", "青椒肉丝", "家常豆腐", "番茄炒蛋", "口水鸡", "木耳炒黄瓜", "香菇腐竹"
+        ];
+
+        // 柔和的莫兰迪色系调色板
+        const colors = [
+            "#FF9AA2", "#FFB7B2", "#FFDAC1", "#E2F0CB", "#B5EAD7", 
+            "#C7CEEA", "#F1CBFF", "#9DDCE0", "#F9E4B7", "#FFC5A1"
+        ];
+
+        const canvas = document.getElementById('wheelCanvas');
+        const ctx = canvas.getContext('2d');
+        const wheelContainer = document.getElementById('wheelContainer');
+        const itemInput = document.getElementById('itemInput');
+        const itemCount = document.getElementById('itemCount');
+        const spinBtn = document.getElementById('spinBtn');
+        const updateBtn = document.getElementById('updateBtn');
+        const modalOverlay = document.getElementById('modalOverlay');
+        const modalResultText = document.getElementById('modalResultText');
+        const modalCloseBtn = document.getElementById('modalCloseBtn');
+
+        let currentItems = [];
+        let currentRotation = 0;
+        let isSpinning = false;
+
+        // 画布渲染逻辑
+        function drawWheel() {
+            const width = canvas.width;
+            const height = canvas.height;
+            const centerX = width / 2;
+            const centerY = height / 2;
+            const radius = width / 2;
+
+            ctx.clearRect(0, 0, width, height);
+
+            if (currentItems.length === 0) {
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, radius, 0, 2 * Math.PI);
+                ctx.fillStyle = '#f0f0f0';
+                ctx.fill();
+                ctx.fillStyle = '#999';
+                ctx.font = '36px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.fillText("列表为空", centerX, centerY);
+                return;
+            }
+
+            const sliceAngle = (2 * Math.PI) / currentItems.length;
+
+            for (let i = 0; i < currentItems.length; i++) {
+                // 1. 画扇形底色
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                // 顶部为 -Math.PI / 2
+                const startAngle = -Math.PI / 2 + i * sliceAngle;
+                const endAngle = -Math.PI / 2 + (i + 1) * sliceAngle;
+                
+                ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                ctx.closePath();
+                ctx.fillStyle = colors[i % colors.length];
+                ctx.fill();
+                
+                // 绘制分隔线，增加质感
+                ctx.lineWidth = 1;
+                ctx.strokeStyle = "rgba(255,255,255,0.5)";
+                ctx.stroke();
+
+                // 2. 画文字
+                ctx.save();
+                ctx.translate(centerX, centerY);
+                // 旋转到扇形中心线
+                const textAngle = startAngle + sliceAngle / 2;
+                ctx.rotate(textAngle);
+
+                ctx.textAlign = "right";
+                ctx.textBaseline = "middle";
+                ctx.fillStyle = "#333";
+                
+                // 针对大量数据（如214个）动态缩小字体
+                // Canvas宽800，半径400
+                let fontSize = Math.max(12, 1100 / currentItems.length);
+                if (currentItems.length > 100) {
+                    fontSize = 11; 
+                    ctx.fillStyle = "rgba(0, 0, 0, 0.6)"; // 数量太多时稍微变淡防止糊成黑块
+                }
+                
+                ctx.font = `bold ${fontSize}px sans-serif`;
+                
+                // 渲染文本，距离边缘留白20
+                ctx.fillText(currentItems[i], radius - 20, 0);
+                
+                ctx.restore();
+            }
+        }
+
+        // 读取文本框内容并更新全局数组和转盘
+        function syncItemsFromTextarea() {
+            const lines = itemInput.value.split('\n');
+            currentItems = lines.map(line => line.trim()).filter(line => line.length > 0);
+            itemCount.innerText = `共 ${currentItems.length} 个`;
+            drawWheel();
+        }
+
+        // 旋转逻辑
+        spinBtn.addEventListener('click', () => {
+            if (currentItems.length === 0) return;
+            if (isSpinning) return;
+            isSpinning = true;
+            spinBtn.disabled = true;
+
+            // 基础旋转5圈 (5 * 360 = 1800) + 随机角度
+            const extraDegrees = Math.floor(Math.random() * 360);
+            const spinDegrees = 1800 + extraDegrees;
+            currentRotation += spinDegrees;
+
+            // 应用 CSS Transform
+            wheelContainer.style.transform = `rotate(${currentRotation}deg)`;
+
+            // 动画时长4秒 (4000ms)，结束后计算结果
+            setTimeout(() => {
+                isSpinning = false;
+                spinBtn.disabled = false;
+
+                // 计算中奖结果
+                // 转盘顺时针旋转，相当于指针逆时针移动
+                const normalizedRotation = currentRotation % 360;
+                // 计算当前指针（位于顶部0度）对应的是第几个扇形
+                // 每个扇形的角度
+                const anglePerItem = 360 / currentItems.length;
+                // 360 - normalizedRotation 得到指针逆时针偏移的绝对角度
+                const pointerAngle = (360 - normalizedRotation) % 360;
+                
+                const winnerIndex = Math.floor(pointerAngle / anglePerItem);
+                const winner = currentItems[winnerIndex];
+
+                // 弹出模态框
+                modalResultText.innerText = winner;
+                modalOverlay.classList.add('show');
+            }, 4000); 
+        });
+
+        // 点击更新转盘按钮
+        updateBtn.addEventListener('click', () => {
+            if (isSpinning) return;
+            syncItemsFromTextarea();
+            
+            // 重置转盘角度到0，方便视觉观察更新效果
+            currentRotation = 0;
+            wheelContainer.style.transition = 'none'; // 瞬间归位
+            wheelContainer.style.transform = `rotate(0deg)`;
+            
+            // 恢复动画属性
+            setTimeout(() => {
+                wheelContainer.style.transition = 'transform 4s cubic-bezier(0.2, 0.9, 0.1, 1)';
+            }, 50);
+        });
+
+        // 关闭弹窗
+        modalCloseBtn.addEventListener('click', () => {
+            modalOverlay.classList.remove('show');
+        });
+
+        // 关键逻辑：在脚本底部立即执行初始化，防止任何异步加载失败
+        function init() {
+            // 将数组注入文本框
+            itemInput.value = defaultItems.join('\n');
+            // 同步并渲染转盘
+            syncItemsFromTextarea();
+        }
+
+        // 立即执行初始化
+        init();
+
+    </script>
+</body>
+</html>
